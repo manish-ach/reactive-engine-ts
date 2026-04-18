@@ -1,21 +1,18 @@
-type Subscriber = () => void;
-
-let activeSubscriber: Subscriber | null = null;
-
-function track<T>(subscriber: Subscriber, fn: () => T): T {
+"use strict";
+let activeSubscriber = null;
+function track(subscriber, fn) {
     try {
         activeSubscriber = subscriber;
         const result = fn();
         return result;
-    } finally {
+    }
+    finally {
         activeSubscriber = null;
     }
 }
-
-function atom<T extends object>(initialValue: T): T {
-    const subscribers_count = new Set<Subscriber>();
-    const subscribers_name = new Set<Subscriber>();
-
+function atom(initialValue) {
+    const subscribers_count = new Set();
+    const subscribers_name = new Set();
     let proxy = new Proxy(initialValue, {
         get(target, key) {
             if (activeSubscriber != null) {
@@ -29,12 +26,11 @@ function atom<T extends object>(initialValue: T): T {
                     subscribers_name.add(activeSubscriber);
                 }
             }
-            return target[key as keyof T];
+            return target[key];
         },
         set(target, key, value) {
-            console.log(`setting - ${String(value)}`);
-            target[key as keyof T] = value;
-
+            console.log(`setting ${String(value)}`);
+            target[key] = value;
             if (String(key) === "count") {
                 for (const subscriber of subscribers_count) {
                     console.log("notifying subscriber of count");
@@ -50,21 +46,16 @@ function atom<T extends object>(initialValue: T): T {
             return true;
         },
     });
-
     return proxy;
 }
-
 let state = atom({ count: 0, name: "Ram" });
-
-function effect(fn: () => void) {
+function effect(fn) {
     const runner = () => {
         track(runner, fn);
     };
     runner();
 }
-
 effect(() => {
     console.log("count effect", state.count);
 });
-
 state.name = "hari";
