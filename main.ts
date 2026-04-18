@@ -13,40 +13,38 @@ function track<T>(subscriber: Subscriber, fn: () => T): T {
 }
 
 function atom<T extends object>(initialValue: T): T {
-    const subscribers_count = new Set<Subscriber>();
-    const subscribers_name = new Set<Subscriber>();
+    const subscriberByKey = new Map<string, Set<Subscriber>>();
 
     let proxy = new Proxy(initialValue, {
         get(target, key) {
+            const property = String(key);
+            let subscribers = subscriberByKey.get(property);
+
+            if (subscribers == null) {
+                subscribers = new Set<Subscriber>();
+                subscriberByKey.set(property, subscribers);
+            }
+
             if (activeSubscriber != null) {
                 console.log(`adding activeSubscriber to subscribers set`);
-                if (String(key) === "count") {
-                    console.log("actually adding lol");
-                    subscribers_count.add(activeSubscriber);
-                }
-                if (String(key) === "name") {
-                    console.log("does name too added?");
-                    subscribers_name.add(activeSubscriber);
-                }
+                subscribers.add(activeSubscriber);
             }
             return target[key as keyof T];
         },
         set(target, key, value) {
-            console.log(`setting - ${String(value)}`);
+            console.log(`\nsetting - ${String(value)}`);
             target[key as keyof T] = value;
 
-            if (String(key) === "count") {
-                for (const subscriber of subscribers_count) {
-                    console.log("notifying subscriber of count");
-                    //subscriber();
+            let property = String(key);
+            let subscibers = subscriberByKey.get(property);
+
+            if (subscibers != null) {
+                for (const subscriber of subscibers) {
+                    console.log(`notifying subscribers of - ${property}`);
+                    subscriber();
                 }
             }
-            if (String(key) === "name") {
-                for (const subscriber of subscribers_name) {
-                    console.log("notifying subscriber of name");
-                    //subscriber();
-                }
-            }
+
             return true;
         },
     });
@@ -67,4 +65,5 @@ effect(() => {
     console.log("count effect", state.count);
 });
 
+state.count = 3;
 state.name = "hari";
