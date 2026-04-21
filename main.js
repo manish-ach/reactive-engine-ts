@@ -1,66 +1,54 @@
-type Subscriber = () => void;
-
-let activeSubscriber: Subscriber | null = null;
-const subscriberDeps = new Map<Subscriber, Set<Set<Subscriber>>>();
-
-function cleanupSubscriber(subscriber: Subscriber) {
+"use strict";
+let activeSubscriber = null;
+const subscriberDeps = new Map();
+function cleanupSubscriber(subscriber) {
     const deps = subscriberDeps.get(subscriber);
-
     if (deps == null) {
         return;
     }
-
     for (const subscribers of deps) {
         subscribers.delete(subscriber);
     }
     deps.clear();
 }
-
-function track<T>(subscriber: Subscriber, fn: () => T): T {
+function track(subscriber, fn) {
     cleanupSubscriber(subscriber);
-
     try {
         activeSubscriber = subscriber;
         const result = fn();
         return result;
-    } finally {
+    }
+    finally {
         activeSubscriber = null;
     }
 }
-
-function atom<T extends object>(initialValue: T): T {
-    const subscribersByKey = new Map<string, Set<Subscriber>>();
-
+function atom(initialValue) {
+    const subscribersByKey = new Map();
     let proxy = new Proxy(initialValue, {
         get(target, key) {
             const property = String(key);
             let subscribers = subscribersByKey.get(property);
-
             if (activeSubscriber != null) {
                 if (subscribers == null) {
-                    subscribers = new Set<Subscriber>();
+                    subscribers = new Set();
                     subscribersByKey.set(property, subscribers);
                 }
-
                 console.log(`adding activeSubscriber to subscribers set`);
                 subscribers.add(activeSubscriber);
-
                 let deps = subscriberDeps.get(activeSubscriber);
                 if (deps == null) {
-                    deps = new Set<Set<Subscriber>>();
+                    deps = new Set();
                     subscriberDeps.set(activeSubscriber, deps);
                 }
                 deps.add(subscribers);
             }
-            return target[key as keyof T];
+            return target[key];
         },
         set(target, key, value) {
             console.log(`\nsetting - ${String(value)}`);
-            target[key as keyof T] = value;
-
+            target[key] = value;
             let property = String(key);
             let subscribers = subscribersByKey.get(property);
-
             if (subscribers != null) {
                 const subscribersToNotify = new Set(subscribers);
                 for (const subscriber of subscribersToNotify) {
@@ -68,33 +56,27 @@ function atom<T extends object>(initialValue: T): T {
                     subscriber();
                 }
             }
-
             return true;
         },
     });
-
     return proxy;
 }
-
 let state = atom({ showcount: true, count: 0, name: "Ram" });
-
-function effect(fn: () => void) {
+function effect(fn) {
     const runner = () => {
         track(runner, fn);
     };
     runner();
 }
-
 effect(() => {
     if (state.showcount) {
         console.log("count effect", state.count);
-    } else {
+    }
+    else {
         console.log(state.name);
     }
 });
-
 state.count = 3;
-
 state.showcount = false;
 state.name = "hari";
 state.count = 10;
