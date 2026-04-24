@@ -1,4 +1,4 @@
-type Subscriber = () => void;
+type Subscriber = (() => void) & { label?: string };
 
 let activeSubscriber: Subscriber | null = null;
 const subscriberDeps = new Map<Subscriber, Set<Set<Subscriber>>>();
@@ -10,6 +10,7 @@ function cleanupSubscriber(subscriber: Subscriber) {
         return;
     }
 
+    console.log(`[cleanup] subscriber=${subscriber.label}`);
     for (const subscribers of deps) {
         subscribers.delete(subscriber);
     }
@@ -42,8 +43,11 @@ function atom<T extends object>(initialValue: T): T {
                     subscribersByKey.set(property, subscribers);
                 }
 
-                console.log(`adding activeSubscriber to subscribers set`);
                 subscribers.add(activeSubscriber);
+
+                console.log(
+                    `[get] property=${property} subscriber=${activeSubscriber.label}`,
+                );
 
                 let deps = subscriberDeps.get(activeSubscriber);
                 if (deps == null) {
@@ -52,19 +56,30 @@ function atom<T extends object>(initialValue: T): T {
                 }
                 deps.add(subscribers);
             }
+
             return target[key as keyof T];
         },
         set(target, key, value) {
-            console.log(`\nsetting - ${String(value)}`);
-            target[key as keyof T] = value;
+            let oldValue = target[key as keyof T];
+
+            if (oldValue === value) {
+                return true;
+            }
 
             let property = String(key);
             let subscribers = subscribersByKey.get(property);
 
+            console.log(
+                `[set] property=${property} old=${String(oldValue)} new=${String(value)}`,
+            );
+            target[key as keyof T] = value;
+
             if (subscribers != null) {
                 const subscribersToNotify = new Set(subscribers);
                 for (const subscriber of subscribersToNotify) {
-                    console.log(`notifying subscribers of - ${property}`);
+                    console.log(
+                        `[notify] property=${property} & subscriber=${subscriber.label}`,
+                    );
                     subscriber();
                 }
             }
@@ -78,23 +93,27 @@ function atom<T extends object>(initialValue: T): T {
 
 let state = atom({ showcount: true, count: 0, name: "Ram" });
 
-function effect(fn: () => void) {
-    const runner = () => {
+function effect(label: string, fn: () => void) {
+    const runner: Subscriber = () => {
+        console.log(`[effect] run ${runner.label}`);
         track(runner, fn);
     };
+
+    runner.label = label;
     runner();
 }
 
-effect(() => {
+effect("mainEffect", () => {
     if (state.showcount) {
-        console.log("count effect", state.count);
+        console.log(`[render] count=${state.count}`);
     } else {
-        console.log(state.name);
+        console.log(`[render] name=${state.name}`);
     }
 });
 
 state.count = 3;
 
 state.showcount = false;
+state.name = "hari";
 state.name = "hari";
 state.count = 10;
